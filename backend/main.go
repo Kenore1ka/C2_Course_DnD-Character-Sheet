@@ -11,8 +11,11 @@ import (
 
 // --- СТРУКТУРЫ ДАННЫХ ---
 
-// AbilityScores хранит значения шести основных характеристик.
-// json:"..." - это теги, которые говорят Go, как называть эти поля при преобразовании в JSON.
+type HitPoints struct {
+	Current int `json:"current"`
+	Max     int `json:"max"`
+}
+
 type AbilityScores struct {
 	Strength     int `json:"strength"`
 	Dexterity    int `json:"dexterity"`
@@ -22,47 +25,51 @@ type AbilityScores struct {
 	Charisma     int `json:"charisma"`
 }
 
-// Character представляет "сырые" данные персонажа, как если бы они хранились в базе данных.
+// Character представляет "сырые" данные персонажа.
 type Character struct {
-	ID            string
-	Name          string
-	AbilityScores AbilityScores
+	ID                       string
+	Name                     string
+	Class                    string
+	Race                     string
+	Alignment                string
+	Level                    int
+	CurrentHitPoints         int
+	AbilityScores            AbilityScores
+	SkillProficiencies       []string
+	SavingThrowProficiencies []string
 }
 
-// CharacterSheet - это полная структура, которую мы отправляем на фронтенд.
-// Она содержит как базовые данные, так и все вычисляемые значения (модификаторы, навыки).
+// CharacterSheet - это полная структура для отправки на фронтенд.
 type CharacterSheet struct {
-	Name             string            `json:"name"`
-	AbilityScores    AbilityScores     `json:"abilityScores"`
-	AbilityModifiers AbilityScores     `json:"abilityModifiers"`
-	Skills           map[string]int    `json:"skills"`
-	SkillMap         map[string]string `json:"skillMap"` // Карта "Навык -> Характеристика" для удобства фронтенда
+	Name                       string            `json:"name"`
+	Class                      string            `json:"class"`
+	Race                       string            `json:"race"`
+	Alignment                  string            `json:"alignment"`
+	Level                      int               `json:"level"`
+	ProficiencyBonus           int               `json:"proficiencyBonus"`
+	HitPoints                  HitPoints         `json:"hitPoints"`
+	ArmorClass                 int               `json:"armorClass"`
+	Initiative                 int               `json:"initiative"`
+	AbilityScores              AbilityScores     `json:"abilityScores"`
+	AbilityModifiers           AbilityScores     `json:"abilityModifiers"`
+	SavingThrows               map[string]int    `json:"savingThrows"`
+	Skills                     map[string]int    `json:"skills"`
+	SkillMap                   map[string]string `json:"skillMap"`
+	SkillProficiencies         []string          `json:"skillProficiencies"`
+	SavingThrowProficiencies   []string          `json:"savingThrowProficiencies"`
 }
 
 // --- КОНФИГУРАЦИЯ И КОНСТАНТЫ ---
 
-// skillAbilityMap определяет, какая характеристика используется для какого навыка.
 var skillAbilityMap = map[string]string{
-	"Акробатика":      "Dexterity",
-	"Анализ":          "Intelligence",
-	"Атлетика":        "Strength",
-	"Внимательность":  "Wisdom",
-	"Выживание":       "Wisdom",
-	"Выступление":     "Charisma",
-	"Запугивание":     "Charisma",
-	"История":         "Intelligence",
-	"Ловкость рук":    "Dexterity",
-	"Магия":           "Intelligence",
-	"Медицина":        "Wisdom",
-	"Обман":           "Charisma",
-	"Природа":         "Intelligence",
-	"Проницательность": "Wisdom",
-	"Скрытность":      "Dexterity",
-	"Убеждение":       "Charisma",
-	"Уход за животными": "Wisdom",
+	"Акробатика":      "Dexterity", "Анализ": "Intelligence", "Атлетика": "Strength",
+	"Внимательность":  "Wisdom", "Выживание": "Wisdom", "Выступление": "Charisma",
+	"Запугивание":     "Charisma", "История": "Intelligence", "Ловкость рук": "Dexterity",
+	"Магия":           "Intelligence", "Медицина": "Wisdom", "Обман": "Charisma",
+	"Природа":         "Intelligence", "Проницательность": "Wisdom", "Скрытность": "Dexterity",
+	"Убеждение":       "Charisma", "Уход за животными": "Wisdom",
 }
 
-// Структура и переменная для хранения конфигурации из config.json
 type AppConfig struct {
 	WelcomeMessage string `json:"welcomeMessage"`
 }
@@ -71,35 +78,35 @@ var config AppConfig
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (БИЗНЕС-ЛОГИКА) ---
 
-// calculateModifier вычисляет модификатор характеристики по правилам D&D 5e.
+func calculateProficiencyBonus(level int) int {
+	return 2 + (level-1)/4
+}
+
 func calculateModifier(score int) int {
 	return int(math.Floor(float64(score-10) / 2))
 }
 
-// getModifierByName - удобная функция для получения модификатора по его строковому названию.
 func getModifierByName(modifiers AbilityScores, name string) int {
 	switch name {
-	case "Strength":
-		return modifiers.Strength
-	case "Dexterity":
-		return modifiers.Dexterity
-	case "Constitution":
-		return modifiers.Constitution
-	case "Intelligence":
-		return modifiers.Intelligence
-	case "Wisdom":
-		return modifiers.Wisdom
-	case "Charisma":
-		return modifiers.Charisma
-	default:
-		return 0
+	case "Strength": return modifiers.Strength
+	case "Dexterity": return modifiers.Dexterity
+	case "Constitution": return modifiers.Constitution
+	case "Intelligence": return modifiers.Intelligence
+	case "Wisdom": return modifiers.Wisdom
+	case "Charisma": return modifiers.Charisma
+	default: return 0
 	}
 }
 
-// createSheetFromCharacter - центральная функция, которая принимает "сырые" данные персонажа
-// и возвращает полностью рассчитанный лист для отправки на фронтенд.
+func proficiencyBonusIf(condition bool, bonus int) int {
+	if condition {
+		return bonus
+	}
+	return 0
+}
+
 func createSheetFromCharacter(character Character) CharacterSheet {
-	// 1. Рассчитываем модификаторы
+	proficiencyBonus := calculateProficiencyBonus(character.Level)
 	modifiers := AbilityScores{
 		Strength:     calculateModifier(character.AbilityScores.Strength),
 		Dexterity:    calculateModifier(character.AbilityScores.Dexterity),
@@ -109,34 +116,62 @@ func createSheetFromCharacter(character Character) CharacterSheet {
 		Charisma:     calculateModifier(character.AbilityScores.Charisma),
 	}
 
-	// 2. Рассчитываем навыки на основе модификаторов
+	savingThrows := make(map[string]int)
+	stProfSet := make(map[string]bool)
+	for _, prof := range character.SavingThrowProficiencies {
+		stProfSet[prof] = true
+	}
+	savingThrows["strength"] = modifiers.Strength + proficiencyBonusIf(stProfSet["strength"], proficiencyBonus)
+	savingThrows["dexterity"] = modifiers.Dexterity + proficiencyBonusIf(stProfSet["dexterity"], proficiencyBonus)
+	savingThrows["constitution"] = modifiers.Constitution + proficiencyBonusIf(stProfSet["constitution"], proficiencyBonus)
+	savingThrows["intelligence"] = modifiers.Intelligence + proficiencyBonusIf(stProfSet["intelligence"], proficiencyBonus)
+	savingThrows["wisdom"] = modifiers.Wisdom + proficiencyBonusIf(stProfSet["wisdom"], proficiencyBonus)
+	savingThrows["charisma"] = modifiers.Charisma + proficiencyBonusIf(stProfSet["charisma"], proficiencyBonus)
+
 	skills := make(map[string]int)
+	skillProfSet := make(map[string]bool)
+	for _, prof := range character.SkillProficiencies {
+		skillProfSet[prof] = true
+	}
 	for skillName, abilityName := range skillAbilityMap {
-		skills[skillName] = getModifierByName(modifiers, abilityName)
+		skills[skillName] = getModifierByName(modifiers, abilityName) + proficiencyBonusIf(skillProfSet[skillName], proficiencyBonus)
+	}
+	
+	initiative := modifiers.Dexterity
+	armorClass := 10 + modifiers.Dexterity
+	maxHitPoints := 8 + (modifiers.Constitution * character.Level)
+	currentHitPoints := character.CurrentHitPoints
+	if currentHitPoints > maxHitPoints {
+		currentHitPoints = maxHitPoints
 	}
 
-	// 3. Собираем и возвращаем финальный объект
 	return CharacterSheet{
-		Name:             character.Name,
-		AbilityScores:    character.AbilityScores,
-		AbilityModifiers: modifiers,
-		Skills:           skills,
-		SkillMap:         skillAbilityMap,
+		Name:                       character.Name,
+		Class:                      character.Class,
+		Race:                       character.Race,
+		Alignment:                  character.Alignment,
+		Level:                      character.Level,
+		ProficiencyBonus:           proficiencyBonus,
+		HitPoints:                  HitPoints{Current: currentHitPoints, Max: maxHitPoints},
+		ArmorClass:                 armorClass,
+		Initiative:                 initiative,
+		AbilityScores:              character.AbilityScores,
+		AbilityModifiers:           modifiers,
+		SavingThrows:               savingThrows,
+		Skills:                     skills,
+		SkillMap:                   skillAbilityMap,
+		SkillProficiencies:         character.SkillProficiencies,
+		SavingThrowProficiencies:   character.SavingThrowProficiencies,
 	}
 }
 
 // --- HTTP ОБРАБОТЧИКИ ---
 
-// characterHandler - это универсальный обработчик для эндпоинта /api/character.
-// Он определяет, какой метод был использован (GET или POST), и вызывает соответствующую функцию.
 func characterHandler(w http.ResponseWriter, r *http.Request) {
-	// Устанавливаем заголовки CORS, чтобы разрешить запросы от нашего фронтенда
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	// Браузер может отправить "preflight" запрос методом OPTIONS перед POST.
-	// Нам нужно просто ответить на него, что всё в порядке.
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -152,28 +187,38 @@ func characterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getCharacter обрабатывает GET-запросы: создает персонажа-заглушку и отправляет его.
 func getCharacter(w http.ResponseWriter, r *http.Request) {
 	mockCharacter := Character{
-		ID:   "1",
-		Name: "Дриззт До'Урден",
+		ID:                       "1",
+		Name:                     "Дриззт До'Урден",
+		Class:                    "Следопыт (Ranger)",
+		Race:                     "Темный эльф (Дроу)",
+		Alignment:                "Хаотично-добрый",
+		Level:                    8,
+		CurrentHitPoints:         65,
 		AbilityScores: AbilityScores{
 			Strength: 13, Dexterity: 20, Constitution: 15,
 			Intelligence: 17, Wisdom: 17, Charisma: 14,
 		},
+		SkillProficiencies:       []string{"Акробатика", "Внимательность", "Скрытность", "Выживание"},
+		SavingThrowProficiencies: []string{"dexterity", "wisdom"},
 	}
 	sheet := createSheetFromCharacter(mockCharacter)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sheet)
 }
 
-// updateCharacter обрабатывает POST-запросы: принимает обновленные данные,
-// пересчитывает все значения и отправляет полный лист обратно.
 func updateCharacter(w http.ResponseWriter, r *http.Request) {
-	// Структура для приема данных от фронтенда. Принимаем только то, что может изменить пользователь.
 	var receivedData struct {
-		Name          string        `json:"name"`
-		AbilityScores AbilityScores `json:"abilityScores"`
+		Name                       string        `json:"name"`
+		Class                      string        `json:"class"`
+		Race                       string        `json:"race"`
+		Alignment                  string        `json:"alignment"`
+		Level                      int           `json:"level"`
+		HitPoints                  HitPoints     `json:"hitPoints"`
+		AbilityScores              AbilityScores `json:"abilityScores"`
+		SkillProficiencies         []string      `json:"skillProficiencies"`
+		SavingThrowProficiencies   []string      `json:"savingThrowProficiencies"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&receivedData); err != nil {
@@ -181,20 +226,24 @@ func updateCharacter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем временный объект, чтобы передать его в нашу центральную логику
-	tempChar := Character{Name: receivedData.Name, AbilityScores: receivedData.AbilityScores}
+	tempChar := Character{
+		Name:                       receivedData.Name,
+		Class:                      receivedData.Class,
+		Race:                       receivedData.Race,
+		Alignment:                  receivedData.Alignment,
+		Level:                      receivedData.Level,
+		CurrentHitPoints:           receivedData.HitPoints.Current,
+		AbilityScores:              receivedData.AbilityScores,
+		SkillProficiencies:         receivedData.SkillProficiencies,
+		SavingThrowProficiencies:   receivedData.SavingThrowProficiencies,
+	}
 	
-	// Используем нашу универсальную функцию, которая пересчитает всё: и модификаторы, и навыки
 	updatedSheet := createSheetFromCharacter(tempChar)
-
-	log.Println("Персонаж обновлен (включая навыки):", updatedSheet.Name)
-
+	log.Println("Персонаж обновлен (включая инфо):", updatedSheet.Name)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedSheet)
 }
 
-
-// healthCheckHandler и loadConfig - служебные функции из предыдущих шагов.
 func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 	w.Header().Set("Content-Type", "application/json")
@@ -215,11 +264,9 @@ func loadConfig(path string) error {
 	return json.Unmarshal(file, &config)
 }
 
-
 // --- ТОЧКА ВХОДА В ПРИЛОЖЕНИЕ ---
 
 func main() {
-	// Загружаем конфигурацию
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
 		configPath = "/app/config/config.json"
@@ -228,11 +275,9 @@ func main() {
 		log.Fatalf("Ошибка при загрузке конфигурации: %v", err)
 	}
 
-	// Регистрируем наши HTTP обработчики
 	http.HandleFunc("/api/health", healthCheckHandler)
 	http.HandleFunc("/api/character", characterHandler)
 
-	// Получаем порт из переменных окружения и запускаем сервер
 	port := os.Getenv("APP_PORT")
 	if port == "" {
 		port = "8080"
