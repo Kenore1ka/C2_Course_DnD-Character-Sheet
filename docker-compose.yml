@@ -1,0 +1,63 @@
+# Указываем версию синтаксиса Docker Compose
+version: '3.8'
+
+# "services" - это блок, где мы описываем наши контейнеры
+services:
+
+  # Наш бэкенд-сервис
+  backend:
+    # Имя, которое будет у контейнера
+    container_name: dnd-backend-container
+    # Инструкция по сборке
+    build:
+      # Контекст для сборки - папка backend
+      context: ./backend
+      # Имя файла Dockerfile (можно опустить, если он называется Dockerfile)
+      dockerfile: Dockerfile
+      args:
+        - TESTER_UID=${DOCKER_USER_UID}
+        - TESTER_GID=${DOCKER_USER_GID}
+    # Проброс портов: порт_на_хосте:порт_в_контейнере
+    ports:
+      # Теперь порт хоста зависит от переменной, а порт контейнера - от APP_PORT
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    # Передаем переменную APP_PORT внутрь контейнера
+    environment:
+      - APP_PORT=${BACKEND_PORT}
+      # Добавляем переменную с путем к конфигу внутри контейнера
+      - CONFIG_PATH=/app/config/config.json
+    # Добавляем секцию volumes
+    volumes:
+      # Пробрасываем нашу локальную папку ./backend/config
+      # в папку /app/config внутри контейнера.
+      # :ro означает read-only (только для чтения), т.к. приложению не нужно менять конфиг.
+      - ./backend/config:/app/config:ro
+    restart: always
+    healthcheck:
+      # Команда для проверки. Docker выполнит ее внутри контейнера.
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/api/health"]
+      interval: 30s       # Проверять каждые 30 секунд
+      timeout: 10s        # Считать проверку проваленной, если она длится дольше 10с
+      retries: 3          # 3 попытки перед тем, как пометить контейнер как "unhealthy"
+      start_period: 5s    # Дать контейнеру 5с на запуск перед первой проверкой
+
+  # Наш фронтенд-сервис
+  frontend:
+    container_name: dnd-frontend-container
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    restart: always
+    # Указываем, что фронтенд должен запускаться только ПОСЛЕ того,
+    # как успешно запустится бэкенд. Это полезно для сложных приложений.
+    depends_on:
+      - backend
+    healthcheck:
+      # Проверяем, что Nginx отдает главную страницу
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

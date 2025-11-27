@@ -7,7 +7,7 @@ function App() {
   // Создаем "состояние" для хранения ответа от сервера
   // status - переменная, setStatus - функция для ее изменения
   const [status, setStatus] = useState('Загрузка...');
-
+  const [message, setMessage] = useState('');
   // useEffect - это специальная функция в React,
   // которая выполняет код один раз после отрисовки компонента.
   // Идеально подходит для запросов к серверу.
@@ -18,6 +18,7 @@ function App() {
       .then(data => {
         // Когда данные получены, обновляем наше состояние
         setStatus(data.status); // data будет { status: "ok" }
+        setMessage(data.message);
       })
       .catch(error => {
         // Если произошла ошибка (например, сервер выключен), сообщаем об этом
@@ -33,6 +34,8 @@ function App() {
         <p>
           Статус сервера: <strong>{status}</strong>
         </p>
+        {/* Отображаем сообщение, если оно есть */}
+        {message && <p><em>{message}</em></p>}
       </header>
     </div>
   );

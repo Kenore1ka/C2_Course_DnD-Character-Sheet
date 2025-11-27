@@ -1,0 +1,8 @@
+# Dependencies
+node_modules
+
+# Build artifact
+dist
+
+# Vite specific
+.env.local
