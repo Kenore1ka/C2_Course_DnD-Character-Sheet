@@ -9,6 +9,8 @@ import (
 // healthCheckHandler - это наш обработчик запросов.
 // Он будет вызываться каждый раз, когда кто-то заходит на нужный нам URL.
 func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	// Разрешаем нашему фронтенду делать запросы
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 	// Устанавливаем заголовок, чтобы клиент знал, что мы отвечаем в формате JSON.
 	w.Header().Set("Content-Type", "application/json")
 
