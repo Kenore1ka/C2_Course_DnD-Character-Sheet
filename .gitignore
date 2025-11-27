@@ -1,0 +1,16 @@
+# Go backend
+/backend/dnd-backend
+/backend/*.exe
+
+# Node frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.env.local
+/frontend/.DS_Store
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
