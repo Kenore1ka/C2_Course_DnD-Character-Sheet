@@ -1,6 +1,3 @@
-# Указываем версию синтаксиса Docker Compose
-version: '3.8'
-
 # "services" - это блок, где мы описываем наши контейнеры
 services:
 
@@ -26,6 +23,11 @@ services:
       - APP_PORT=${BACKEND_PORT}
       # Добавляем переменную с путем к конфигу внутри контейнера
       - CONFIG_PATH=/app/config/config.json
+      - DATABASE_HOST=db # 'db' - это имя сервиса базы данных ниже
+      - DATABASE_USER=${POSTGRES_USER}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_NAME=${POSTGRES_DB}
+      - DATABASE_PORT=5432
     # Добавляем секцию volumes
     volumes:
       # Пробрасываем нашу локальную папку ./backend/config
@@ -40,6 +42,8 @@ services:
       timeout: 10s        # Считать проверку проваленной, если она длится дольше 10с
       retries: 3          # 3 попытки перед тем, как пометить контейнер как "unhealthy"
       start_period: 5s    # Дать контейнеру 5с на запуск перед первой проверкой
+    depends_on:
+      - db
 
   # Наш фронтенд-сервис
   frontend:
@@ -61,3 +65,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 5s
+
+  db:
+    image: postgres:16-alpine # Используем официальный легковесный образ Postgres
+    container_name: dnd-db-container
+    # Переменные для инициализации базы данных
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      # Эта строка создает именованный том 'db-data'.
+      # Все данные, которые Postgres запишет в /var/lib/postgresql/data,
+      # сохранятся в этом томе на вашем компьютере, переживая перезапуски.
+      - db-data:/var/lib/postgresql/data
+    ports:
+      # Пробрасываем порт, чтобы можно было подключиться к БД с компьютера (необязательно)
+      - "5432:5432"
+    restart: always
+
+# --- НОВЫЙ РАЗДЕЛ: ИМЕНОВАННЫЕ ТОМА ---
+# Здесь мы объявляем том, который использовали выше
+volumes:
+  db-data:
